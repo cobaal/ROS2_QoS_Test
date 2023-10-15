@@ -4,6 +4,7 @@ from std_msgs.msg import Int32
 from telecom_interface.msg import Test
 
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSLivelinessPolicy, qos_profile_system_default
+from rclpy.qos_event import QoSEventHandler, SubscriptionEventCallbacks
 
 import os
 
@@ -43,6 +44,10 @@ class PySub(Node):
         lifespan=qos_profile_system_default.lifespan,\
         liveliness_lease_duration=qos_profile_system_default.liveliness_lease_duration)
 
+        self.event_callbacks = SubscriptionEventCallbacks(
+            deadline=self.deadline_callback
+        )
+
         self.print_status()
 
         key_press_thread = threading.Thread(target=self.detect_key_press)
@@ -51,6 +56,9 @@ class PySub(Node):
 
     def listener_callback(self, msg):
         self.get_logger().info("idx: %d, data: %f, time: %f" % (msg.index, msg.data, msg.current_time))
+
+    def deadline_callback(self, event):
+        self.get_logger().info("Deadline missed!")
 
     def getch(self):
         fd = sys.stdin.fileno()
@@ -87,8 +95,12 @@ class PySub(Node):
                 self.print_status()  
 
             elif char == '5':
-                self.qos_profile.depth = (self.qos_profile.depth + 1 ) % 11
-                self.print_status()  
+                try:
+                    depth = int(input("\n * Input depth length : "))
+                    self.qos_profile.depth = depth
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
 
             elif char == '6':
                 try:
@@ -119,7 +131,7 @@ class PySub(Node):
                 sys.exit(0)
 
             elif char == 's':
-                self.sub = self.create_subscription(Test, self.topic_name, self.listener_callback, self.qos_profile)
+                self.sub = self.create_subscription(Test, self.topic_name, self.listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
                 print("\n Start subscribing...")
                 break
 
@@ -127,7 +139,7 @@ class PySub(Node):
         cl = os.system('cls' if os.name == 'nt' else 'clear')
         width = os.get_terminal_size().columns
         print('='*width, end='')
-        print("\n{:^{}}".format('TOPIC SUBSCRIBER NODE', width))
+        print("\n{:^{}}".format('TOPIC SUBSCRIBER NODE 2.0', width))
         print('='*width, end='')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])

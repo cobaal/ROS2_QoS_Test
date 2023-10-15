@@ -4,6 +4,7 @@ from std_msgs.msg import Int32
 from telecom_interface.msg import Test
 
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSLivelinessPolicy, qos_profile_system_default
+from rclpy.qos_event import QoSEventHandler, PublisherEventCallbacks
 
 import os
 
@@ -42,11 +43,17 @@ class PyPub(Node):
         lifespan=qos_profile_system_default.lifespan,\
         liveliness_lease_duration=qos_profile_system_default.liveliness_lease_duration)
 
+        self.event_callbacks = PublisherEventCallbacks(
+            deadline=self.deadline_callback
+        )
+
         self.print_status()
 
         key_press_thread = threading.Thread(target=self.detect_key_press)
         key_press_thread.daemon = True
         key_press_thread.start()        
+
+        self.toggle = False;
 
     def timer_callback(self):
         msg = Test()
@@ -56,6 +63,9 @@ class PyPub(Node):
         self.pub_.publish(msg)
         self.get_logger().info("publishing: %d, %f, %f " % (msg.index, msg.data, msg.current_time))
         self.idx += 1
+
+    def deadline_callback(self, event):
+        self.get_logger().info("Deadline missed!")
 
     def getch(self):
         fd = sys.stdin.fileno()
@@ -92,8 +102,12 @@ class PyPub(Node):
                 self.print_status()  
 
             elif char == '5':
-                self.qos_profile.depth = (self.qos_profile.depth + 1 ) % 11
-                self.print_status()  
+                try:
+                    depth = int(input("\n * Input depth length : "))
+                    self.qos_profile.depth = depth
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
 
             elif char == '6':
                 try:
@@ -124,17 +138,35 @@ class PyPub(Node):
                 sys.exit(0)
 
             elif char == 's':
-                self.pub_ = self.create_publisher(Test, self.topic_name, self.qos_profile)
+                self.pub_ = self.create_publisher(Test, self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
                 self.timer = self.create_timer(1.0, self.timer_callback)
                 self.idx = 0
                 print("\n Start publishing...")
                 break
 
+            elif char == 'c':
+                if self.toggle == False:
+                    self.pub_ = self.create_publisher(Test, self.topic_name, self.qos_profile)
+                    self.toggle = True
+                    print("\n Created publisher.")
+                else:
+                    print("\n Some publisher already exist.")
+                
+            elif char == 'd':
+                if self.toggle == True:
+                    _result = self.destroy_publisher(self.pub_)
+                    # self.pub_.destroy()
+                    self.toggle = False
+                    print(_result)
+                    print("\n Destroyed publisher.")
+                else:
+                    print("\n Any publisher does not exist.")
+
     def print_status(self):
         cl = os.system('cls' if os.name == 'nt' else 'clear')
         width = os.get_terminal_size().columns
         print('='*width, end='')
-        print("\n{:^{}}".format('TOPIC PUBLISHER NODE', width))
+        print("\n{:^{}}".format('TOPIC PUBLISHER NODE 2.0', width))
         print('='*width, end='')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])
@@ -148,6 +180,8 @@ class PyPub(Node):
 
         print("\n [Press key '1~8' to set QoS profile.]")
         print(" [Press key 's' to start the Publisher node.]")
+        print(" [Press key 'c' to create publisher.]")
+        print(" [Press key 'd' to destroy publisher.]")
         print(" [Press key 'q' to quit.]")
 
 
