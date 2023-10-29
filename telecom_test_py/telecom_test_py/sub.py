@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32
-from telecom_interface.msg import Test
+from telecom_interface.msg import Test, TestCustom
 
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSLivelinessPolicy, qos_profile_system_default
 from rclpy.qos_event import QoSEventHandler, SubscriptionEventCallbacks
@@ -30,6 +30,8 @@ class PySub(Node):
         self.durability = [QoSDurabilityPolicy.TRANSIENT_LOCAL, QoSDurabilityPolicy.VOLATILE]
         self.liveliness = [QoSLivelinessPolicy.AUTOMATIC, QoSLivelinessPolicy.MANUAL_BY_TOPIC]
 
+        self.msg_size = 0
+
         self.history_idx = 0
         self.reliability_idx = 0
         self.durability_idx = 0
@@ -55,7 +57,11 @@ class PySub(Node):
         key_press_thread.start() 
 
     def listener_callback(self, msg):
-        self.get_logger().info("idx: %d, data: %f, time: %f" % (msg.index, msg.data, msg.current_time))
+        if self.msg_size == 0:
+            _len = 8
+        else:
+            _len = len(msg.custom_data)
+        self.get_logger().info("idx: %d, data length: %d, time: %f" % (msg.index, _len, msg.current_time))
 
     def deadline_callback(self, event):
         self.get_logger().info("Deadline missed!")
@@ -69,6 +75,12 @@ class PySub(Node):
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+        
+    def msg_type(self, size):
+        if size == 0:
+            return Test
+        else:
+            return TestCustom
 
     def detect_key_press(self):
         while True:
@@ -126,12 +138,20 @@ class PySub(Node):
                 except:
                     print("\n * Invalid input.")
 
+            elif char == '9':
+                try:
+                    m_size = int(input("\n * Input data size (Byte) : "))
+                    self.msg_size = m_size
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
+
             elif char == 'q' or char == '\x03':
                 print('* Terminated.')
                 sys.exit(0)
 
             elif char == 's':
-                self.sub = self.create_subscription(Test, self.topic_name, self.listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
+                self.sub = self.create_subscription(self.msg_type(self.msg_size), self.topic_name, self.listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
                 print("\n Start subscribing...")
                 break
 
@@ -150,8 +170,11 @@ class PySub(Node):
         print('   (6) lifespan\t   : ' + str(int(str(self.qos_profile.lifespan).split(' ')[0]) / 1000000000) + ' sec')
         print('   (7) deadline\t   : ' + str(int(str(self.qos_profile.deadline).split(' ')[0]) / 1000000000) + ' sec')
         print('   (8) liveliness_lease_duration : ' + str(int(str(self.qos_profile.liveliness_lease_duration).split(' ')[0]) / 1000000000) + ' sec')
-
+        print('\n* Additional option')
+        print('   (9) data_size [0 is 8 bytes]  : ' + str(self.msg_size) + ' byte(s)')
+        
         print("\n [Press key '1~8' to set QoS profile.]")
+        print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Subscriber node.]")
         print(" [Press key 'q' to quit.]")
 

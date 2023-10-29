@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32
-from telecom_interface.msg import Test
+from telecom_interface.msg import Test, TestCustom
 
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSLivelinessPolicy, qos_profile_system_default
 from rclpy.qos_event import QoSEventHandler, PublisherEventCallbacks
@@ -28,6 +28,8 @@ class PyPub(Node):
         self.reliability = [QoSReliabilityPolicy.RELIABLE, QoSReliabilityPolicy.BEST_EFFORT]
         self.durability = [QoSDurabilityPolicy.TRANSIENT_LOCAL, QoSDurabilityPolicy.VOLATILE]
         self.liveliness = [QoSLivelinessPolicy.AUTOMATIC, QoSLivelinessPolicy.MANUAL_BY_TOPIC]
+
+        self.msg_size = 0
 
         self.history_idx = 0
         self.reliability_idx = 0
@@ -56,12 +58,19 @@ class PyPub(Node):
         self.toggle = False;
 
     def timer_callback(self):
-        msg = Test()
-        msg.index = self.idx
-        msg.data = random.random()
+        if self.msg_size == 0:
+            msg = Test()
+            msg.data = random.random()
+            _len = 8
+        else:
+            msg = TestCustom()
+            msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
+            _len = len(msg.custom_data)
+        
+        msg.index = self.idx        
         msg.current_time = time.time()
         self.pub_.publish(msg)
-        self.get_logger().info("publishing: %d, %f, %f " % (msg.index, msg.data, msg.current_time))
+        self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
         self.idx += 1
 
     def deadline_callback(self, event):
@@ -76,6 +85,12 @@ class PyPub(Node):
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+        
+    def msg_type(self, size):
+        if size == 0:
+            return Test
+        else:
+            return TestCustom
 
     def detect_key_press(self):
         while True:
@@ -133,12 +148,20 @@ class PyPub(Node):
                 except:
                     print("\n * Invalid input.")
 
+            elif char == '9':
+                try:
+                    m_size = int(input("\n * Input data size (Byte) : "))
+                    self.msg_size = m_size
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
+
             elif char == 'q' or char == '\x03':
                 print('* Terminated.')
                 sys.exit(0)
 
             elif char == 's':
-                self.pub_ = self.create_publisher(Test, self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
+                self.pub_ = self.create_publisher(self.msg_type(self.msg_size), self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
                 self.timer = self.create_timer(1.0, self.timer_callback)
                 self.idx = 0
                 print("\n Start publishing...")
@@ -146,7 +169,7 @@ class PyPub(Node):
 
             elif char == 'c':
                 if self.toggle == False:
-                    self.pub_ = self.create_publisher(Test, self.topic_name, self.qos_profile)
+                    self.pub_ = self.create_publisher(self.msg_type(self.msg_size), self.topic_name, self.qos_profile)
                     self.toggle = True
                     print("\n Created publisher.")
                 else:
@@ -177,8 +200,11 @@ class PyPub(Node):
         print('   (6) lifespan\t   : ' + str(int(str(self.qos_profile.lifespan).split(' ')[0]) / 1000000000) + ' sec')
         print('   (7) deadline\t   : ' + str(int(str(self.qos_profile.deadline).split(' ')[0]) / 1000000000) + ' sec')
         print('   (8) liveliness_lease_duration : ' + str(int(str(self.qos_profile.liveliness_lease_duration).split(' ')[0]) / 1000000000) + ' sec')
+        print('\n* Additional option')
+        print('   (9) data_size [0 is 8 bytes]  : ' + str(self.msg_size) + ' byte(s)')
 
         print("\n [Press key '1~8' to set QoS profile.]")
+        print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Publisher node.]")
         print(" [Press key 'c' to create publisher.]")
         print(" [Press key 'd' to destroy publisher.]")
