@@ -10,13 +10,14 @@ import os
 
 import random
 import time
+import datetime
 
 import threading
 import sys
 import tty
 import termios
 
-import time
+import csv
 
 class PySub(Node):
     def __init__(self, node_name, topic_name):
@@ -36,6 +37,8 @@ class PySub(Node):
         self.reliability_idx = 0
         self.durability_idx = 0
         self.liveliness_idx = 0   
+
+        self.savedData = []
 
         self.qos_profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,\
         depth=qos_profile_system_default.depth,\
@@ -57,11 +60,13 @@ class PySub(Node):
         key_press_thread.start() 
 
     def listener_callback(self, msg):
+        receivedTime = time.time()
         if self.msg_size == 0:
             _len = 8
         else:
             _len = len(msg.custom_data)
-        self.get_logger().info("idx: %d, data length: %d, time: %f" % (msg.index, _len, msg.current_time))
+        self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
+        self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
 
     def deadline_callback(self, event):
         self.get_logger().info("Deadline missed!")
@@ -189,6 +194,16 @@ def main(args=None):
     try:
         rclpy.spin(sub)
     except KeyboardInterrupt:
+        if sub.savedData:
+            current_datetime = datetime.datetime.now()
+            filename = current_datetime.strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
+            exit_input = input("\n\n * Do you want to save data? (Y/N): ").strip().upper()
+            if exit_input in ('Y'):
+                with open(filename, 'w') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerows(sub.savedData)
+                    print(" ** Saved to " + os.getcwd() + "/" + filename)
+
         print("\n * Terminated.")
         
     # sub.destroy_node()
