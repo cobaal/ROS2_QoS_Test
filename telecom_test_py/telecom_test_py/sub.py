@@ -19,6 +19,11 @@ import termios
 
 import csv
 
+import socket
+import pickle
+
+import ipaddress
+
 class PySub(Node):
     def __init__(self, node_name, topic_name):
         super().__init__(node_name)
@@ -67,6 +72,42 @@ class PySub(Node):
             _len = len(msg.custom_data)
         self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
         self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
+
+    def tcp_server(self, host):
+        port = 1700
+
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.bind((host, port))
+        server_socket.listen(1)
+        
+        print(f"\n Listening on {host}:{port}")
+        conn, addr = server_socket.accept()
+
+        print(f"Connection from {addr}")
+        try:
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    break
+
+                receivedTime = time.time()
+
+                # Deserialize the data
+                msg = pickle.loads(data)
+                
+                if self.msg_size == 0:
+                    _len = 8
+                else:
+                    _len = len(msg.custom_data)
+                self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
+                self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
+
+        except Exception as e:
+            print(f"Connection failed: {e}")
+        except KeyboardInterrupt:
+            pass
+        finally:
+            conn.close()
 
     def deadline_callback(self, event):
         self.get_logger().info("Deadline missed!")
@@ -160,11 +201,21 @@ class PySub(Node):
                 print("\n Start subscribing...")
                 break
 
+            elif char == 't':
+                host = input("\n *Enter the server IP address: ")
+                try:
+                    ipaddress.ip_address(host)
+                    self.idx = 0
+                    self.tcp_server(host)
+                    break
+                except ValueError:
+                    print("\n * Invalid input.")
+
     def print_status(self):
         cl = os.system('cls' if os.name == 'nt' else 'clear')
         width = os.get_terminal_size().columns
         print('='*width, end='')
-        print("\n{:^{}}".format('TOPIC SUBSCRIBER NODE 2.0', width))
+        print("\n{:^{}}".format('TOPIC SUBSCRIBER NODE 3.0', width))
         print('='*width, end='')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])
@@ -181,6 +232,7 @@ class PySub(Node):
         print("\n [Press key '1~8' to set QoS profile.]")
         print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Subscriber node.]")
+        print(" [Press key 't' to start TCP socket server.]")
         print(" [Press key 'q' to quit.]")
 
 def main(args=None):

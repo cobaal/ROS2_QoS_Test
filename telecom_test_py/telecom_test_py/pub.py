@@ -16,6 +16,10 @@ import sys
 import tty
 import termios
 
+import socket
+import pickle
+
+import ipaddress
 
 class PyPub(Node):
     def __init__(self, node_name, topic_name):
@@ -35,6 +39,8 @@ class PyPub(Node):
         self.reliability_idx = 0
         self.durability_idx = 0
         self.liveliness_idx = 0   
+
+        self.hz = 1.0
 
         self.qos_profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,\
         depth=qos_profile_system_default.depth,\
@@ -72,6 +78,34 @@ class PyPub(Node):
         self.pub_.publish(msg)
         self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
         self.idx += 1
+
+    def tcp_client(self, host):
+        port = 1700
+
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((host, port))
+
+        try:
+            while True:
+                if self.msg_size == 0:
+                    msg = Test()
+                    msg.data = random.random()
+                    _len = 8
+                else:
+                    msg = TestCustom()
+                    msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
+                    _len = len(msg.custom_data)
+                
+                msg.index = self.idx
+                msg.current_time = time.time()
+                client_socket.send(pickle.dumps(msg))
+                self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
+                self.idx += 1
+                time.sleep(self.hz)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            client_socket.close()
 
     def deadline_callback(self, event):
         self.get_logger().info("Deadline missed!")
@@ -156,13 +190,20 @@ class PyPub(Node):
                 except:
                     print("\n * Invalid input.")
 
+            elif char == '0':
+                try:
+                    self.hz = float(input("\n * Input transmission period (sec) : "))
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
+
             elif char == 'q' or char == '\x03':
                 print('* Terminated.')
                 sys.exit(0)
 
             elif char == 's':
                 self.pub_ = self.create_publisher(self.msg_type(self.msg_size), self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
-                self.timer = self.create_timer(1.0, self.timer_callback)
+                self.timer = self.create_timer(self.hz, self.timer_callback)
                 self.idx = 0
                 print("\n Start publishing...")
                 break
@@ -185,12 +226,23 @@ class PyPub(Node):
                 else:
                     print("\n Any publisher does not exist.")
 
+            elif char == 't':
+                host = input("\n *Enter the server IP address: ")
+                try:
+                    ipaddress.ip_address(host)
+                    self.idx = 0
+                    self.tcp_client(host)
+                    break
+                except ValueError:
+                    print("\n * Invalid input.")
+
     def print_status(self):
         cl = os.system('cls' if os.name == 'nt' else 'clear')
         width = os.get_terminal_size().columns
         print('='*width, end='')
-        print("\n{:^{}}".format('TOPIC PUBLISHER NODE 2.0', width))
+        print("\n{:^{}}".format('TOPIC PUBLISHER NODE 3.0', width))
         print('='*width, end='')
+        print('\n   (0) transmission period : ' + str(self.hz) + ' s')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])
         print('   (2) reliability : ' + str(self.qos_profile.reliability).split('.')[1])
@@ -203,11 +255,13 @@ class PyPub(Node):
         print('\n* Additional option')
         print('   (9) data_size [0 is 8 bytes]  : ' + str(self.msg_size) + ' byte(s)')
 
-        print("\n [Press key '1~8' to set QoS profile.]")
+        print("\n [Press key '0' to set transmission period.]")
+        print(" [Press key '1~8' to set QoS profile.]")
         print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Publisher node.]")
         print(" [Press key 'c' to create publisher.]")
         print(" [Press key 'd' to destroy publisher.]")
+        print(" [Press key 't' to start TCP socket client.]")
         print(" [Press key 'q' to quit.]")
 
 
