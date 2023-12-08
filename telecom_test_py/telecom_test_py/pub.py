@@ -55,7 +55,7 @@ class PyPub(Node):
         key_press_thread.daemon = True
         key_press_thread.start()        
 
-        self.toggle = False;
+        self.toggle = False
 
     def timer_callback(self):
         if self.msg_size == 0:
