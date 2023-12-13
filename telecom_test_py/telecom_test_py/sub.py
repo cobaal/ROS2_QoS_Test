@@ -103,14 +103,11 @@ class PySub(Node):
                     break
 
                 receivedTime = time.time()
-                print(raw_msglen)
                 msglen = struct.unpack('>I', raw_msglen)[0]
-                print(msglen)
                 deserialized_msg = self.recvall(conn, msglen)
                 
                 # Deserialize the data
                 msg = pickle.loads(deserialized_msg)
-                print(msg)
                 if self.msg_size == 0:
                     _len = 8
                 else:
