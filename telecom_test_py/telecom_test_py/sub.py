@@ -21,6 +21,7 @@ import csv
 
 import socket
 import pickle
+import struct
 
 import ipaddress
 
@@ -73,10 +74,21 @@ class PySub(Node):
         self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
         self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
 
+    def recvall(self, sock, n):
+        data = bytearray()
+        while len(data) < n:
+            packet = sock.recv(n - len(data))
+            if not packet:
+                return None
+            data.extend(packet)
+        return bytes(data)
+
     def tcp_server(self, host):
         port = 1700
 
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1) # disable Nagle's alogrithm
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         server_socket.bind((host, port))
         server_socket.listen(1)
         
@@ -86,15 +98,19 @@ class PySub(Node):
         print(f"Connection from {addr}")
         try:
             while True:
-                data = conn.recv(1024)
-                if not data:
+                raw_msglen = self.recvall(conn, 4)
+                if not raw_msglen:
                     break
 
                 receivedTime = time.time()
-
-                # Deserialize the data
-                msg = pickle.loads(data)
+                print(raw_msglen)
+                msglen = struct.unpack('>I', raw_msglen)[0]
+                print(msglen)
+                deserialized_msg = self.recvall(conn, msglen)
                 
+                # Deserialize the data
+                msg = pickle.loads(deserialized_msg)
+                print(msg)
                 if self.msg_size == 0:
                     _len = 8
                 else:

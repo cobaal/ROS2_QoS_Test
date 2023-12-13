@@ -18,6 +18,7 @@ import termios
 
 import socket
 import pickle
+import struct
 
 import ipaddress
 
@@ -41,6 +42,7 @@ class PyPub(Node):
         self.liveliness_idx = 0   
 
         self.hz = 1.0
+        self.offset = 0
 
         self.qos_profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,\
         depth=qos_profile_system_default.depth,\
@@ -74,7 +76,7 @@ class PyPub(Node):
             _len = len(msg.custom_data)
         
         msg.index = self.idx        
-        msg.current_time = time.time()
+        msg.current_time = time.time() - self.offset
         self.pub_.publish(msg)
         self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
         self.idx += 1
@@ -83,6 +85,8 @@ class PyPub(Node):
         port = 1700
 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1) # disable Nagle's alogrithm
+        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         client_socket.connect((host, port))
 
         try:
@@ -97,12 +101,19 @@ class PyPub(Node):
                     _len = len(msg.custom_data)
                 
                 msg.index = self.idx
-                msg.current_time = time.time()
-                client_socket.send(pickle.dumps(msg))
+                msg.current_time = time.time() - self.offset
+                serialized_message = pickle.dumps(msg)
+                message_length = len(serialized_message)
+                print(message_length)
+                message_length_bytes = struct.pack('>I', message_length)
+                print(message_length_bytes)
+                print(serialized_message)
+                client_socket.sendall(message_length_bytes + serialized_message)
                 self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
                 self.idx += 1
                 time.sleep(self.hz)
-        except KeyboardInterrupt:
+        except Exception as e:
+            print(f"Error: {e}")
             pass
         finally:
             client_socket.close()
@@ -236,6 +247,14 @@ class PyPub(Node):
                 except ValueError:
                     print("\n * Invalid input.")
 
+            elif char == 'o':
+                try:
+                    m_offset = float(input("\n * Input offset (ms) : "))
+                    self.offset = round(m_offset / 1000, 7)
+                    self.print_status()  
+                except:
+                    print("\n * Invalid input.")
+
     def print_status(self):
         cl = os.system('cls' if os.name == 'nt' else 'clear')
         width = os.get_terminal_size().columns
@@ -243,6 +262,7 @@ class PyPub(Node):
         print("\n{:^{}}".format('TOPIC PUBLISHER NODE 3.0', width))
         print('='*width, end='')
         print('\n   (0) transmission period : ' + str(self.hz) + ' s')
+        print('   (O) offset : ' + str(self.offset) + ' s')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])
         print('   (2) reliability : ' + str(self.qos_profile.reliability).split('.')[1])
@@ -256,6 +276,7 @@ class PyPub(Node):
         print('   (9) data_size [0 is 8 bytes]  : ' + str(self.msg_size) + ' byte(s)')
 
         print("\n [Press key '0' to set transmission period.]")
+        print("\n [Press key 'O' to input ntp offset.]")
         print(" [Press key '1~8' to set QoS profile.]")
         print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Publisher node.]")
