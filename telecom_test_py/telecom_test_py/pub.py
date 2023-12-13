@@ -104,10 +104,7 @@ class PyPub(Node):
                 msg.current_time = time.time() - self.offset
                 serialized_message = pickle.dumps(msg)
                 message_length = len(serialized_message)
-                print(message_length)
                 message_length_bytes = struct.pack('>I', message_length)
-                print(message_length_bytes)
-                print(serialized_message)
                 client_socket.sendall(message_length_bytes + serialized_message)
                 self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
                 self.idx += 1
