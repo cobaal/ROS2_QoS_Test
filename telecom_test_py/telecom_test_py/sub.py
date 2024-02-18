@@ -113,7 +113,7 @@ class PySub(Node):
                 else:
                     _len = len(msg.custom_data)
                 self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
-                self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
+                self.savedData.append((msg.index, msg.current_time, receivedTime, receivedTime - msg.current_time))
 
         except Exception as e:
             print(f"Connection failed: {e}")
@@ -260,10 +260,11 @@ def main(args=None):
         rclpy.spin(sub)
     except KeyboardInterrupt:
         if sub.savedData:
-            current_datetime = datetime.datetime.now()
-            filename = current_datetime.strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
             exit_input = input("\n\n * Do you want to save data? (Y/N): ").strip().upper()
             if exit_input in ('Y'):
+                current_datetime = datetime.datetime.now()
+                prefix_name = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+                filename = prefix_name + input(" * File name : " + prefix_name) + ".csv"
                 with open(filename, 'w') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerows(sub.savedData)
