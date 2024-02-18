@@ -3,9 +3,12 @@
     <data_writer profile_name="datawriter_profile" is_default_profile="true">
         <times> 
             <heartbeatPeriod>
-                <sec>1</sec>
-                <nanosec>000000000</nanosec>
+                <sec>0</sec>
+                <nanosec>100000000</nanosec>
             </heartbeatPeriod>
         </times>
+        <qos>
+            <disable_heartbeat_piggyback>true</disable_heartbeat_piggyback>
+        </qos>
     </data_writer>
 </profiles>

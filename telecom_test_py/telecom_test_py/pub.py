@@ -66,20 +66,21 @@ class PyPub(Node):
         self.toggle = False
 
     def timer_callback(self):
-        if self.msg_size == 0:
-            msg = Test()
-            msg.data = random.random()
-            _len = 8
-        else:
-            msg = TestCustom()
-            msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
-            _len = len(msg.custom_data)
-        
-        msg.index = self.idx        
-        msg.current_time = time.time() - self.offset
-        self.pub_.publish(msg)
-        self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
-        self.idx += 1
+        if self.idx < 1000:
+            if self.msg_size == 0:
+                msg = Test()
+                msg.data = random.random()
+                _len = 8
+            else:
+                msg = TestCustom()
+                msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
+                _len = len(msg.custom_data)
+            
+            msg.index = self.idx        
+            msg.current_time = time.time() - self.offset
+            self.pub_.publish(msg)
+            self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
+            self.idx += 1
 
     def tcp_client(self, host):
         port = 1700
