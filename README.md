@@ -45,6 +45,14 @@ ros2 run telecom_test_py sub_test_node --remap __node:=listener_discovery_server
 
 ~~~
 sudo tc qdisc add dev [iface] root netem loss [0~100]%
+sudo tc qdisc change dev [iface] root netem loss [0~100]%
 sudo tc qdisc delete dev [iface] root netem loss [0~100]%
+~~~
+
+5. Change Heartbeat broadcast period
+
+~~~
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export FASTRTPS_DEFAULT_PROFILES_FILE={path}/profiles.xml
 ~~~
 
