@@ -56,3 +56,25 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export FASTRTPS_DEFAULT_PROFILES_FILE={path}/profiles.xml
 ~~~
 
+6. Clock synchronization
+
+~~~
+sudo apt install ntp
+sudo nano /etc/ntp.conf
+~~~
+- client
+~~~
+  # Use Ubuntu's ntp server as a fallback.
+  # pool ntp.ubuntu.com
+  server [master ip] iburst
+~~~~
+- local server
+~~~
+  server 127.127.1.0
+~~~
+- start
+~~~
+sudo systemctl restart ntp
+watch -n 0.5 ntpq -p
+sudo ufw allow ntp
+~~~
