@@ -6,6 +6,8 @@ from telecom_interface.msg import Test, TestCustom
 from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSLivelinessPolicy, qos_profile_system_default
 from rclpy.qos_event import QoSEventHandler, PublisherEventCallbacks
 
+from functools import partial
+
 import os
 
 import random
@@ -41,8 +43,11 @@ class PyPub(Node):
         self.durability_idx = 0
         self.liveliness_idx = 0   
 
-        self.hz = 1.0
+        self.interval = 1.0
         self.offset = 0
+
+        self.npkt = 1000
+        self.test_intervals = [0.01, 0.05, 0.1, 0.5, 1.0]
 
         self.qos_profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,\
         depth=qos_profile_system_default.depth,\
@@ -66,21 +71,43 @@ class PyPub(Node):
         self.toggle = False
 
     def timer_callback(self):
-        if self.idx < 1000:
-            if self.msg_size == 0:
-                msg = Test()
-                msg.data = random.random()
-                _len = 8
-            else:
-                msg = TestCustom()
-                msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
-                _len = len(msg.custom_data)
-            
+        if self.msg_size == 0:
+            msg = Test()
+            msg.data = random.random()
+            _len = 8
+        else:
+            msg = TestCustom()
+            msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
+            _len = len(msg.custom_data)
+        
+        msg.index = self.idx        
+        msg.current_time = time.time() - self.offset
+        self.pub_.publish(msg)
+        self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
+        self.idx += 1
+
+    def testbed_timer_callback(self, arg_interval):
+        if self.idx < self.npkt:
+            msg = Test()
+            msg.data = arg_interval            
             msg.index = self.idx        
             msg.current_time = time.time() - self.offset
             self.pub_.publish(msg)
-            self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
+            self.get_logger().info("publishing [idx: %d, testcase: %f, time: %f]" % (msg.index, msg.data, msg.current_time))
             self.idx += 1
+
+        if self.idx == self.npkt:
+            self.timer.cancel()
+            print("\n Done.")          
+
+    def ack_listener_callback(self, msg):
+        self.interval_idx += 1
+        if len(self.test_intervals) > self.interval_idx:
+            _interval = self.test_intervals[self.interval_idx]
+            self.timer.cancel()
+            self.timer = self.create_timer(_interval, partial(self.testbed_timer_callback, _interval))
+            self.idx = 0
+            print("\n Case [%d] Start publishing..." % self.interval_idx)
 
     def tcp_client(self, host):
         port = 1700
@@ -109,7 +136,7 @@ class PyPub(Node):
                 client_socket.sendall(message_length_bytes + serialized_message)
                 self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
                 self.idx += 1
-                time.sleep(self.hz)
+                time.sleep(self.interval)
         except Exception as e:
             print(f"Error: {e}")
             pass
@@ -201,7 +228,7 @@ class PyPub(Node):
 
             elif char == '0':
                 try:
-                    self.hz = float(input("\n * Input transmission period (sec) : "))
+                    self.interval = float(input("\n * Input transmission period (sec) : "))
                     self.print_status()  
                 except:
                     print("\n * Invalid input.")
@@ -212,10 +239,22 @@ class PyPub(Node):
 
             elif char == 's':
                 self.pub_ = self.create_publisher(self.msg_type(self.msg_size), self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
-                self.timer = self.create_timer(self.hz, self.timer_callback)
+                self.timer = self.create_timer(self.interval, self.timer_callback)
                 self.idx = 0
                 print("\n Start publishing...")
                 break
+
+            elif char == 'x':
+                self.interval_idx = 0
+                _interval = self.test_intervals[self.interval_idx]
+                self.pub_ = self.create_publisher(self.msg_type(self.msg_size), self.topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
+                self.timer = self.create_timer(_interval, partial(self.testbed_timer_callback, _interval))
+                self.idx = 0
+                print("\n Case [%d] Start publishing..." % self.interval_idx)
+
+                self.sub_ack = self.create_subscription(Int32, "ack_topic", self.ack_listener_callback, self.qos_profile)
+                break
+
 
             elif char == 'c':
                 if self.toggle == False:
@@ -259,7 +298,7 @@ class PyPub(Node):
         print('='*width, end='')
         print("\n{:^{}}".format('TOPIC PUBLISHER NODE 3.0', width))
         print('='*width, end='')
-        print('\n   (0) transmission period : ' + str(self.hz) + ' s')
+        print('\n   (0) transmission period : ' + str(self.interval) + ' s')
         print('   (O) offset : ' + str(self.offset) + ' s')
         print('\n * QoS Profile')
         print('   (1) history\t   : ' + str(self.qos_profile.history).split('.')[1])
@@ -281,6 +320,7 @@ class PyPub(Node):
         print(" [Press key 'c' to create publisher.]")
         print(" [Press key 'd' to destroy publisher.]")
         print(" [Press key 't' to start TCP socket client.]")
+        print(" [Press key 'x' to experiment.]")
         print(" [Press key 'q' to quit.]")
 
 

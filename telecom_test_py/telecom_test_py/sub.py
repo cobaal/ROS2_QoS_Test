@@ -46,6 +46,8 @@ class PySub(Node):
 
         self.savedData = []
 
+        self.npkt = 1000
+
         self.qos_profile = QoSProfile(history=QoSHistoryPolicy.KEEP_LAST,\
         depth=qos_profile_system_default.depth,\
         reliability=QoSReliabilityPolicy.RELIABLE,\
@@ -73,6 +75,16 @@ class PySub(Node):
             _len = len(msg.custom_data)
         self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
         self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
+
+    def testbed_listener_callback(self, msg):
+        receivedTime = time.time()
+        self.get_logger().info("received msg [idx: %d, testcase: %f, time: %f] received [time: %f, delay %f s]" % (msg.index, msg.data, msg.current_time, receivedTime, receivedTime-msg.current_time))
+        self.savedData.append((msg.index, msg.data, msg.current_time, receivedTime, receivedTime - msg.current_time))
+
+        if msg.index == self.npkt - 1:
+            ack_msg = Int32()
+            ack_msg.data = 1
+            self.pub_ack.publish(ack_msg)
 
     def recvall(self, sock, n):
         data = bytearray()
@@ -214,6 +226,13 @@ class PySub(Node):
                 print("\n Start subscribing...")
                 break
 
+            elif char == 'x':
+                self.sub = self.create_subscription(self.msg_type(self.msg_size), self.topic_name, self.testbed_listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
+                print("\n Start subscribing...")
+
+                self.pub_ack = self.create_publisher(Int32, 'ack_topic', self.qos_profile)
+                break
+
             elif char == 't':
                 host = input("\n *Enter the server IP address: ")
                 try:
@@ -245,6 +264,7 @@ class PySub(Node):
         print("\n [Press key '1~8' to set QoS profile.]")
         print(" [Press key '9' to set size of data.]")
         print(" [Press key 's' to start the Subscriber node.]")
+        print(" [Press key 'x' to start experiment.]")
         print(" [Press key 't' to start TCP socket server.]")
         print(" [Press key 'q' to quit.]")
 
@@ -261,7 +281,7 @@ def main(args=None):
     except KeyboardInterrupt:
         if sub.savedData:
             exit_input = input("\n\n * Do you want to save data? (Y/N): ").strip().upper()
-            if exit_input in ('Y'):
+            if exit_input != 'N':
                 current_datetime = datetime.datetime.now()
                 prefix_name = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
                 filename = prefix_name + input(" * File name : " + prefix_name) + ".csv"
