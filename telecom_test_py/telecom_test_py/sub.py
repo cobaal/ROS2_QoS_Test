@@ -74,7 +74,16 @@ class PySub(Node):
         else:
             _len = len(msg.custom_data)
         self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
-        self.savedData.append((msg.index, _len, msg.current_time, receivedTime))
+        self.savedData.append((msg.index, msg.current_time, receivedTime, receivedTime - msg.current_time))
+
+    def stress_listener_callback(self, msg):
+        receivedTime = time.time()
+        if self.msg_size == 0:
+            _len = 8
+        else:
+            _len = len(msg.custom_data)
+        self.get_logger().info("received msg [idx: %d, data length: %d, time: %f] received [time: %f, delay %f s]" % (msg.index, _len, msg.current_time, receivedTime, receivedTime-msg.current_time))
+        self.savedData.append((msg.data, msg.index, msg.current_time, receivedTime, receivedTime - msg.current_time))
 
     def testbed_listener_callback(self, msg):
         receivedTime = time.time()
@@ -224,6 +233,15 @@ class PySub(Node):
             elif char == 's':
                 self.sub = self.create_subscription(self.msg_type(self.msg_size), self.topic_name, self.listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
                 print("\n Start subscribing...")
+                break
+
+            elif char == 'e':
+                self.sub_list = []
+                for i in range(1, 101):
+                    local_topic_name = f"test_stress_topic_{i}"
+                    subscriber = self.create_subscription(self.msg_type(self.msg_size), local_topic_name, self.stress_listener_callback, self.qos_profile, event_callbacks=self.event_callbacks)
+                    self.sub_list.append(subscriber)
+                print("\n Start stress subscribing...")
                 break
 
             elif char == 'x':

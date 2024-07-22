@@ -86,6 +86,24 @@ class PyPub(Node):
         self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
         self.idx += 1
 
+    def stress_timer_callback(self):
+        if self.msg_size == 0:
+            msg = Test()
+            #msg.data = random.random()
+            _len = 8
+        else:
+            msg = TestCustom()
+            msg.custom_data = [bytes(1) for _ in range(self.msg_size)]
+            _len = len(msg.custom_data)
+        
+        msg.index = self.idx        
+        msg.current_time = time.time() - self.offset
+        for i in range(0, 100):
+            msg.data = i + 0.0
+            self.pub_list[i].publish(msg)
+        self.get_logger().info("publishing [idx: %d, length: %d, time: %f]" % (msg.index, _len, msg.current_time))
+        self.idx += 1
+
     def testbed_timer_callback(self, arg_interval):
         if self.idx < self.npkt:
             msg = Test()
@@ -242,6 +260,17 @@ class PyPub(Node):
                 self.timer = self.create_timer(self.interval, self.timer_callback)
                 self.idx = 0
                 print("\n Start publishing...")
+                break
+
+            elif char == 'e':
+                self.pub_list = []
+                for i in range(0, 100):
+                    local_topic_name = f"test_stress_topic_{i}"
+                    publisher = self.create_publisher(self.msg_type(self.msg_size), local_topic_name, self.qos_profile, event_callbacks=self.event_callbacks)
+                    self.pub_list.append(publisher)
+                self.timer = self.create_timer(self.interval, self.stress_timer_callback)
+                self.idx = 0
+                print("\n Start stress publishing...")
                 break
 
             elif char == 'x':
